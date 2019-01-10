@@ -1,8 +1,28 @@
 const express = require('express')
+const uuid = require('uuid/v1');
 const app = express()
 const port = 3000
 const bodyParser = require('body-parser')
+const cors = (req, res, next) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    next()
+}
+const requestFilter = (req, res, next) => {
+    res.locals.id = uuid();
+    res.locals.log = logWithRequestData(req, res);
+    next();
+}
+const responseFilter = (req, res, next) => {
+    res.locals.log(`Responding with ${res.statusCode}`);
+    next();
+}
+const logWithRequestData = (req, res) => (message) => {
+    console.log(`[${new Date().toISOString()}][${req.path}][${res.locals.id}] ${message}`);
+}
+
 app.use(bodyParser.json());
+app.use(requestFilter)
+app.use(cors);
 
 const OrderStatus = Object.freeze({
     SUBMITTED: "submitted",
@@ -46,64 +66,39 @@ const addOrder = (params) => {
     } else {
         return {err: validationResult};
     }
-
 }
 
-app.get("/orders", (req, res) => {
-    console.log("Fetching orders");
-    res.type("application/json");
-    res.set("Access-Control-Allow-Headers", ["accept", "Content-Type"]);
-    res.set("Access-Control-Allow-Origin", "*");
-    res.send(JSON.stringify(fetchAllOrders()));
+app.get("/orders", (req, res, next) => {
+    res.locals.log("Fetching all orders");
+    res.json(fetchAllOrders());
+    next();
 });
 
-app.get("/orders/:id", (req, res) => {
+app.get("/orders/:id", (req, res, next) => {
+    res.locals.log("Fetching order by ID");
     const order = byId[req.params.id];
-    res.type("application/json");
-    if (order) {
-        res.status(200).send(JSON.stringify(order));
-    } else {
-        res.status(404).send(JSON.stringify({error: "Could not find order"}));
-    }
-})
-
-app.post("/orders", (req, res) => {
-    console.log("Received a create order request");
-    console.dir(req.body);
-    const {order, err} = addOrder(req.body);
-    res.type("application/json");
-    if (order) {
-        res.status(201).send(JSON.stringify(order));
-    } else {
-        res.status(err.status).send(JSON.stringify({error: err.message}));
-    }
-})
-
-// app.use(async (ctx, next) => {
-//     const method = ctx.request.method.toUpperCase();
-//     if (method === "GET") {
-//         const path = ctx.request.path;
-//         if (body && body.id) {
-//             const order = byId[body.id];
-//             if (order) {
-//                 ctx.body = order;
-//             } else {
-//                 ctx.throw(404);
-//             }
-//         } else {
-//             ctx.body = fetchAllOrders();
-//         }
-//     } else if (method === "POST") {
-//         const {order, err} = addOrder(ctx.request.body);
-//         if (order) {
-//             ctx.body = order;
-//             ctx.status = 201;
-//         } else {
-//             ctx.body = err.message;
-//             ctx.status = err.status;
-//         }
-//     }
     
-// });
+    if (order) {
+        res.status(200).json(order);
+    } else {
+        res.locals.log(`Could not find order with ID : '${req.params.id}'`);
+        res.status(404).json({error: "Could not find order"});
+    }
+    next();
+})
 
+app.post("/orders", (req, res, next) => {
+    res.locals.log("Received a create order request");
+    res.locals.log(JSON.stringify(req.body));
+    const {order, err} = addOrder(req.body);
+    if (order) {
+        res.status(201).json(order);
+    } else {
+        res.locals.log(`Validation failed, message: '${err.message}'`);
+        res.status(err.status).json({error: err.message});
+    }
+    next();
+})
+
+app.use(responseFilter);
 app.listen(port, () => {console.log("Started")});
