@@ -17,7 +17,7 @@ const responseFilter = (req, res, next) => {
     next();
 }
 const logWithRequestData = (req, res) => (message) => {
-    console.log(`[${new Date().toISOString()}][${req.path}][${res.locals.id}] ${message}`);
+    console.log(`[${new Date().toISOString()}][${req.method}][${req.path}][${res.locals.id}] ${message}`);
 }
 
 app.use(bodyParser.json());
@@ -68,6 +68,21 @@ const addOrder = (params) => {
     }
 }
 
+const updateOrder = (id, params) => {
+    const order = byId[id];
+    if (!order) {
+        return {err: {message: "Order does not exist", status: 404}}
+    }
+    const validationResult = validateParams(params);
+    if (validationResult === true) {        
+        const updatedOrder = {...order, title: params.title, status: params.status};
+        byId[order.id] = updatedOrder;
+        return {order: updatedOrder};
+    } else {
+        return {err: validationResult};
+    }
+}
+
 app.get("/orders", (req, res, next) => {
     res.locals.log("Fetching all orders");
     res.json(fetchAllOrders());
@@ -95,6 +110,24 @@ app.post("/orders", (req, res, next) => {
         res.status(201).json(order);
     } else {
         res.locals.log(`Validation failed, message: '${err.message}'`);
+        res.status(err.status).json({error: err.message});
+    }
+    next();
+})
+
+app.post("/orders/:id", (req, res, next) => {
+    res.locals.log("Received an update order request");
+    res.locals.log(JSON.stringify(req.body));
+    if (!req.params.id) {
+        res.status(400).json({error: "Invalid ID value provided"});
+        next();
+        return;
+    }
+    const {order, err} = updateOrder(req.params.id, req.body);
+    if (order) {
+        res.status(200).json(order);
+    } else {
+        res.locals.log(`Failed to update order, message: '${err.message}'`);
         res.status(err.status).json({error: err.message});
     }
     next();
