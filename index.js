@@ -1,12 +1,10 @@
 const express = require('express')
+const cors = require('cors');
 const uuid = require('uuid/v1');
 const app = express()
 const port = 3000
 const bodyParser = require('body-parser')
-const cors = (req, res, next) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    next()
-}
+
 const requestFilter = (req, res, next) => {
     res.locals.id = uuid();
     res.locals.log = logWithRequestData(req, res);
@@ -22,7 +20,16 @@ const logWithRequestData = (req, res) => (message) => {
 
 app.use(bodyParser.json());
 app.use(requestFilter)
-app.use(cors);
+
+var corsOptionsDelegate = function (req, callback) {
+    var corsOptions = {
+        origin: '*',
+        methods: ["GET", "POST", "PUT", "OPTIONS"],
+        allowedHeaders: ["Content-Type"]
+    };
+    callback(null, corsOptions)
+}
+app.use(cors(corsOptionsDelegate))
 
 const OrderStatus = Object.freeze({
     SUBMITTED: "submitted",
